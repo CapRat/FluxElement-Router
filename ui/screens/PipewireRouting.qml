@@ -38,7 +38,7 @@ Page {
                 x = savedXY[0]
                 y = savedXY[1]
             }
-            let dynPWNode = nodeTempalte.createObject(routingPanel, {x: x, y: y, node: node})
+            let dynPWNode = nodeTempalte.createObject(scrollPanel.contentItem, {x: x, y: y, node: node})
             if (dynPWNode) {
                 nodeElementList.push(dynPWNode)
             }
@@ -70,41 +70,58 @@ Page {
 
         onLinksChanged: redrawLinksDynamic()
     }
-    // Canvas für Links
-    Canvas {
-        id: linkCanvas
+    Flickable {
+        id: scrollPanel
         anchors.fill: parent
+        contentWidth:parent.width*2
+        contentHeight:parent.height*2
+        // Canvas für Links
+        Canvas {
+            id: linkCanvas
+            anchors.fill: parent
 
-        onWidthChanged: redrawLinksDynamic()
-        onHeightChanged: redrawLinksDynamic()
+            onWidthChanged: redrawLinksDynamic()
+            onHeightChanged: redrawLinksDynamic()
 
-        onPaint: {
-            var ctx = getContext("2d")
-            ctx.clearRect(0, 0, width, height)
+            onPaint: {
+                var ctx = getContext("2d")
+                ctx.clearRect(0, 0, width, height)
 
-            ctx.strokeStyle = "#FF9800"       // Material Accent Farbe
-            ctx.lineWidth = 2
-            ctx.lineCap = "round"
+                ctx.strokeStyle = "#FF9800"       // Material Accent Farbe
+                ctx.lineWidth = 2
+                ctx.lineCap = "round"
 
-            for (var i = 0; i < model.links.length; i++) {
-                var l = model.links[i]
+                for (var i = 0; i < model.links.length; i++) {
+                    var l = model.links[i]
 
-                var CoordInputPort = getPortCoordinate(l.inputPort, l.inputNode)
-                var CoordOutputPort = getPortCoordinate(l.outputPort, l.outputNode)
-                if (CoordInputPort && CoordOutputPort) {
-                    // Absolute Position der Ports
-                    var startX = CoordInputPort.x
-                    var startY = CoordInputPort.y
-                    var endX = CoordOutputPort.x
-                    var endY = CoordOutputPort.y
-                    //  console.log(startX+":"+startY+"----->"+endX+":"+endY)
+                    var CoordInputPort = getPortCoordinate(l.inputPort, l.inputNode)
+                    var CoordOutputPort = getPortCoordinate(l.outputPort, l.outputNode)
+                    if (CoordInputPort && CoordOutputPort) {
+                        // Absolute Position der Ports
+                        var startX = CoordInputPort.x
+                        var startY = CoordInputPort.y
+                        var endX = CoordOutputPort.x
+                        var endY = CoordOutputPort.y
+                        //  console.log(startX+":"+startY+"----->"+endX+":"+endY)
 
-                    // Material-like curved link (Bezier)
-                    var cp1X = startX + 50
-                    var cp1Y = startY
-                    var cp2X = endX - 50
-                    var cp2Y = endY
+                        // Material-like curved link (Bezier)
+                        var cp1X = startX + 50
+                        var cp1Y = startY
+                        var cp2X = endX - 50
+                        var cp2Y = endY
 
+                        ctx.beginPath()
+                        ctx.moveTo(startX, startY)
+                        ctx.lineTo(endX, endY)
+                        // ctx.bezierCurveTo(cp1X, cp1Y, cp2X, cp2Y, endX, endY)
+                        ctx.stroke()
+                    }
+                }
+                if (routingPanel.startDraggingPoint && routingPanel.currentDraggingPoint) {
+                    var startX = routingPanel.startDraggingPoint.x
+                    var startY = routingPanel.startDraggingPoint.y
+                    var endX = routingPanel.currentDraggingPoint.x
+                    var endY = routingPanel.currentDraggingPoint.y
                     ctx.beginPath()
                     ctx.moveTo(startX, startY)
                     ctx.lineTo(endX, endY)
@@ -112,38 +129,32 @@ Page {
                     ctx.stroke()
                 }
             }
-            if(routingPanel.startDraggingPoint &&routingPanel.currentDraggingPoint ) {
-                var startX = routingPanel.startDraggingPoint.x
-                var startY = routingPanel.startDraggingPoint.y
-                var endX = routingPanel.currentDraggingPoint.x
-                var endY =  routingPanel.currentDraggingPoint.y
-                ctx.beginPath()
-                ctx.moveTo(startX, startY)
-                ctx.lineTo(endX, endY)
-                // ctx.bezierCurveTo(cp1X, cp1Y, cp2X, cp2Y, endX, endY)
-                ctx.stroke()
-            }
         }
     }
-
     Component {
         id: nodeTempalte
         PipeWireNode {
             id: nodeX
             onStartDragPort: (portId, portPosX, portPosY) => {
-                routingPanel.startDraggingPoint = {x: portPosX, y: portPosY}
+                scrollPanel.interactive=false
+                var mapped= scrollPanel.mapToItem(scrollPanel.contentItem, portPosX,portPosY)
+                routingPanel.startDraggingPoint = {x: mapped.x, y: mapped.y}
                 console.log("Start Dragging" + portId)
                 redrawLinksDynamic()
             }
             onDraggingPort: (portId, portPosX, portPosY) => {
-                routingPanel.currentDraggingPoint= {x: portPosX, y: portPosY}
-                if (routingPanel.startDraggingPoint!=null)
+                var mapped= scrollPanel.mapToItem(scrollPanel.contentItem, portPosX,portPosY)
+                routingPanel.currentDraggingPoint =  {x: mapped.x, y: mapped.y}
+                if (routingPanel.startDraggingPoint != null)
                     redrawLinksDynamic()
             }
             onDragStopPort: (portId, portPosX, portPosY) => {
+                scrollPanel.interactive=true
                 routingPanel.startDraggingPoint = null
-                routingPanel.currentDraggingPoint=null
-                    redrawLinksDynamic()
+                routingPanel.currentDraggingPoint = null
+                var mapped= scrollPanel.mapToItem(scrollPanel.contentItem, portPosX,portPosY)
+                console.log("Stopped" + portId)
+                redrawLinksDynamic()
             }
             onDraggingNode: redrawLinksDynamic()
         }

@@ -119,6 +119,7 @@ Item {
 
         }
     }
+
     MouseArea {
         id: dragArea
         anchors.fill: pipeWireNode
