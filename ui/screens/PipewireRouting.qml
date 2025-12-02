@@ -8,6 +8,8 @@ import PipeWireUiModel 1.0
 Page {
     property var nodeElementList: [];
     property var saveLocation: new Map()
+    property var startDraggingPoint: null
+    property var currentDraggingPoint: null
     id: routingPanel
 
 
@@ -43,14 +45,14 @@ Page {
         }
     }
 
-    function redrawLinksDynamic(){
+    function redrawLinksDynamic() {
         linkCanvas.requestPaint()
     }
 
-    function getPortCoordinate(portId,nodeId){
-        for(var i =0; i< nodeElementList.length;i++){
-            let nodeElement=nodeElementList[i]
-            if(nodeElement) {
+    function getPortCoordinate(portId, nodeId) {
+        for (var i = 0; i < nodeElementList.length; i++) {
+            let nodeElement = nodeElementList[i]
+            if (nodeElement) {
                 let point = nodeElement.getPortCoordinate(portId)
                 if (point) {
                     point.x = nodeElement.x + point.x
@@ -88,27 +90,38 @@ Page {
                 var l = model.links[i]
 
                 var CoordInputPort = getPortCoordinate(l.inputPort, l.inputNode)
-                var CoordOutputPort = getPortCoordinate(l.outputPort,l.outputNode)
-                if(CoordInputPort && CoordOutputPort) {
+                var CoordOutputPort = getPortCoordinate(l.outputPort, l.outputNode)
+                if (CoordInputPort && CoordOutputPort) {
                     // Absolute Position der Ports
                     var startX = CoordInputPort.x
                     var startY = CoordInputPort.y
                     var endX = CoordOutputPort.x
                     var endY = CoordOutputPort.y
-                  //  console.log(startX+":"+startY+"----->"+endX+":"+endY)
+                    //  console.log(startX+":"+startY+"----->"+endX+":"+endY)
 
                     // Material-like curved link (Bezier)
-                    var cp1X = startX+50
+                    var cp1X = startX + 50
                     var cp1Y = startY
-                    var cp2X = endX-50
+                    var cp2X = endX - 50
                     var cp2Y = endY
 
                     ctx.beginPath()
                     ctx.moveTo(startX, startY)
-                    ctx.lineTo(endX,endY)
-                   // ctx.bezierCurveTo(cp1X, cp1Y, cp2X, cp2Y, endX, endY)
+                    ctx.lineTo(endX, endY)
+                    // ctx.bezierCurveTo(cp1X, cp1Y, cp2X, cp2Y, endX, endY)
                     ctx.stroke()
                 }
+            }
+            if(routingPanel.startDraggingPoint &&routingPanel.currentDraggingPoint ) {
+                var startX = routingPanel.startDraggingPoint.x
+                var startY = routingPanel.startDraggingPoint.y
+                var endX = routingPanel.currentDraggingPoint.x
+                var endY =  routingPanel.currentDraggingPoint.y
+                ctx.beginPath()
+                ctx.moveTo(startX, startY)
+                ctx.lineTo(endX, endY)
+                // ctx.bezierCurveTo(cp1X, cp1Y, cp2X, cp2Y, endX, endY)
+                ctx.stroke()
             }
         }
     }
@@ -117,8 +130,20 @@ Page {
         id: nodeTempalte
         PipeWireNode {
             id: nodeX
-            onStartDragPort: (portID, portPosX, portPosY) => {
-                console.log("Start Dragging" + portID)
+            onStartDragPort: (portId, portPosX, portPosY) => {
+                routingPanel.startDraggingPoint = {x: portPosX, y: portPosY}
+                console.log("Start Dragging" + portId)
+                redrawLinksDynamic()
+            }
+            onDraggingPort: (portId, portPosX, portPosY) => {
+                routingPanel.currentDraggingPoint= {x: portPosX, y: portPosY}
+                if (routingPanel.startDraggingPoint!=null)
+                    redrawLinksDynamic()
+            }
+            onDragStopPort: (portId, portPosX, portPosY) => {
+                routingPanel.startDraggingPoint = null
+                routingPanel.currentDraggingPoint=null
+                    redrawLinksDynamic()
             }
             onDraggingNode: redrawLinksDynamic()
         }

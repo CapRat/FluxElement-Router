@@ -36,7 +36,6 @@ Item {
                     return {x: pElement.x, y: pElement.y+pElement.height/2}
                 }
                 else{
-
                     return {x: pElement.x+pElement.width, y: pElement.y+pElement.height/2}
                 }
             }
@@ -50,6 +49,7 @@ Item {
 
         Item {
             property var port;
+            property var self;
             width:port1.width
             height:port1.height
             Rectangle {
@@ -75,22 +75,25 @@ Item {
 
                     // drag.target: port1
                     onPressed: (mouse) => {
-                        startDragPort(port.id, mouse.x, mouse.y)
+                        var globalPos=portDragArea.mapToGlobal(mouse.x,mouse.y)
+                        startDragPort(port.id, globalPos.x, globalPos.y)
                     }
 
                     onPositionChanged: (mouse) => {
-                        draggingPort(port.id, mouse.x, mouse.y)
+                        var globalPos=portDragArea.mapToGlobal(mouse.x,mouse.y)
+                        draggingPort(port.id, globalPos.x, globalPos.y)
                     }
 
                     onReleased: (mouse) => {
-                        dragStopPort(port.id, mouse.x, mouse.y)
+                        var globalPos=portDragArea.mapToGlobal(mouse.x,mouse.y)
+                        dragStopPort(port.id, globalPos.x, globalPos.y)
                     }
                 }
             }
         }
     }
 
-    signal startDragPort(int portID, int portPosX, int portPosY)
+    signal startDragPort(int portId, int portPosX, int portPosY)
 
     signal draggingPort(int portId, int curX, int curY)
 
@@ -138,6 +141,7 @@ Item {
                     y: initialportYDistance + inCounter * portYDistance + inCounter * portHeight,
                     port: p
                 })
+
                 inCounter++
             } else {
                 inst=portTemplate.createObject(pipeWireNodeRoot, {
@@ -146,6 +150,7 @@ Item {
                 })
                 outCounter++
             }
+            inst.self=inst
             if(inst){
                 portElementList.push(inst)
             }
