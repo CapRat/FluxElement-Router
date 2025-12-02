@@ -10,6 +10,7 @@ Item {
     property int portYDistance: 5 // how far away the ports are
     property int initialportYDistance: 25 // how large is the initial distance to the first port
     property int portXDistance: 5 // offset how far the ports are inside the node
+    property var portElementList:[]
     function getMaxLengthPorts() {
         var inCounter = 0
         var outCounter = 0
@@ -25,12 +26,32 @@ Item {
         return Math.max(inCounter, outCounter)
     }
 
+    function getPortCoordinate(portId){
+        for(var i =0; i< portElementList.length;i++){
+            let pElement=portElementList[i]
+            if(pElement && pElement.port.id===portId)
+            {
+                //return pElement.mapToItem(null,pElement.x-(pElement.width/2), pElement.y-50)
+                if(pElement.port.direction==="in") {
+                    return {x: pElement.x, y: pElement.y+pElement.height/2}
+                }
+                else{
+
+                    return {x: pElement.x+pElement.width, y: pElement.y+pElement.height/2}
+                }
+            }
+        }
+        return null
+    }
+
+
     Component {
         id: portTemplate
 
         Item {
             property var port;
-
+            width:port1.width
+            height:port1.height
             Rectangle {
                 id: port1
                 width: portText.width
@@ -58,11 +79,11 @@ Item {
                     }
 
                     onPositionChanged: (mouse) => {
-                        dragging(port.id, mouse.x, mouse.y)
+                        draggingPort(port.id, mouse.x, mouse.y)
                     }
 
                     onReleased: (mouse) => {
-                        dragStop(port.id, mouse.x, mouse.y)
+                        dragStopPort(port.id, mouse.x, mouse.y)
                     }
                 }
             }
@@ -71,9 +92,11 @@ Item {
 
     signal startDragPort(int portID, int portPosX, int portPosY)
 
-    signal dragging(int portId, int curX, int curY)
+    signal draggingPort(int portId, int curX, int curY)
 
-    signal dragStop(int portId, int curX, int curY)
+    signal dragStopPort(int portId, int curX, int curY)
+
+    signal draggingNode()
 
     Rectangle {
         id: pipeWireNode
@@ -97,25 +120,34 @@ Item {
         id: dragArea
         anchors.fill: pipeWireNode
         drag.target: pipeWireNodeRoot
+        onPositionChanged: {
+            if (drag.active) {
+                draggingNode()
+            }
+        }
+
     }
     Component.onCompleted: {
-        var inCounter = 0
-        var outCounter = 0
+        let inCounter = 0;
+        let outCounter = 0
         for (let i = 0; i < node.ports.length; i++) {
-            var p = node.ports[i]
-
+            let p = node.ports[i]
+            let inst=null
             if (p.direction === "in") {
-                portTemplate.createObject(pipeWireNodeRoot, {
+                inst=portTemplate.createObject(pipeWireNodeRoot, {
                     y: initialportYDistance + inCounter * portYDistance + inCounter * portHeight,
                     port: p
                 })
                 inCounter++
             } else {
-                portTemplate.createObject(pipeWireNodeRoot, {
+                inst=portTemplate.createObject(pipeWireNodeRoot, {
                     y: initialportYDistance + outCounter * portYDistance + outCounter * portHeight,
                     port: p
                 })
                 outCounter++
+            }
+            if(inst){
+                portElementList.push(inst)
             }
         }
     }

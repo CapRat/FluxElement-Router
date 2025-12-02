@@ -17,10 +17,12 @@ class PipeWireUIModel :public QObject{
 public:
     PipeWireUIModel(QObject* parent=nullptr);
     Q_PROPERTY(QList<QVariant> nodes READ getNodes NOTIFY nodesUpdated)
+    Q_PROPERTY(QList<QVariant> links READ getLinks NOTIFY linksUpdated)
     QList<QVariant> getNodes();
-
+    QList<QVariant> getLinks();
 signals:
     void nodesUpdated();
+    void linksUpdated();
 
 private:
 

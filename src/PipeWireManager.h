@@ -34,6 +34,8 @@ namespace PipeWire {
         PortId inputPort{};
         PortId outputPort{};
         pw_proxy * proxyRef=nullptr;
+        NodeId inputNode{};
+        NodeId outputNode{};
     };
 
     class PipeWireManager {
@@ -60,6 +62,7 @@ namespace PipeWire {
         bool disconnectPorts(PortId outputNode, PortId inputNode);
 
     private:
+        NodeId getParentNodeFromPort(PortId portId);
         Node *getNodeWithId(NodeId entityId);
         Link *getLinkWithPorts(PortId output, PortId input);
         void pipewireEntityAdded(uint32_t entityId,const std::string &type, const spa_dict *props);

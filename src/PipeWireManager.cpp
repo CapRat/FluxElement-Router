@@ -4,14 +4,17 @@
 
 #include "PipeWireManager.h"
 
+#include <iostream>
+
 struct TransportManPortPort {
     PipeWire::PipeWireManager *manager;
     PipeWire::PortId portOut;
     PipeWire::PortId portIn;
 };
 
-PipeWire::PipeWireManager::PipeWireManager(const PipeWireChangedCallbackType& pipewireChangedCallback)  : loop(nullptr), context(nullptr), core(nullptr), registry(nullptr),
-                                               running(true) {
+PipeWire::PipeWireManager::PipeWireManager(const PipeWireChangedCallbackType &pipewireChangedCallback) : loop(nullptr),
+    context(nullptr), core(nullptr), registry(nullptr),
+    running(true) {
     this->setPipewireHasChangedCallback(pipewireChangedCallback);
     pw_init(nullptr, nullptr);
 
@@ -60,7 +63,6 @@ PipeWire::PipeWireManager::PipeWireManager(const PipeWireChangedCallbackType& pi
 }
 
 
-
 PipeWire::PipeWireManager::~PipeWireManager() {
     running = false;
 
@@ -89,8 +91,9 @@ std::vector<PipeWire::Link> PipeWire::PipeWireManager::listLinks() {
     return links;
 }
 
-void PipeWire::PipeWireManager::setPipewireHasChangedCallback(const PipeWireChangedCallbackType &pipewireHasChangedCallback) {
-    this->pipewireChangedCallback=pipewireHasChangedCallback;
+void PipeWire::PipeWireManager::setPipewireHasChangedCallback(
+    const PipeWireChangedCallbackType &pipewireHasChangedCallback) {
+    this->pipewireChangedCallback = pipewireHasChangedCallback;
 }
 
 PipeWire::Node *PipeWire::PipeWireManager::getNodeWithId(NodeId entityId) {
@@ -147,10 +150,12 @@ void PipeWire::PipeWireManager::pipewireEntityAdded(uint32_t entityId, const std
         link.id = entityId;
         link.inputPort = std::stoi(getFromSpaDict(PW_KEY_LINK_INPUT_PORT));
         link.outputPort = std::stoi(getFromSpaDict(PW_KEY_LINK_OUTPUT_PORT));
+        link.inputNode= this->getParentNodeFromPort(link.inputPort);
+        link.outputNode= this->getParentNodeFromPort(link.outputPort);
+        auto str=  getFromSpaDict(PW_KEY_NODE_NAME);
         this->links.push_back(link);
         pipeWireHasChanged(EntityType::Link);
     }
-
 }
 
 void PipeWire::PipeWireManager::pipewireEntityRemoved(uint32_t entityId) {
@@ -187,7 +192,6 @@ void PipeWire::PipeWireManager::pipewireEntityRemoved(uint32_t entityId) {
             return;
         }
     }
-
 }
 
 bool PipeWire::PipeWireManager::connectPorts(const PortId portOutId, const PortId portInId) {
@@ -217,10 +221,8 @@ bool PipeWire::PipeWireManager::internalConnectPorts(const PortId portOutId, con
     const auto portInIdStr = std::to_string(portInId);
     const auto portOutIdStr = std::to_string(portOutId);
     const spa_dict_item props_items[] = {
-
         {PW_KEY_LINK_OUTPUT_PORT, portOutIdStr.c_str()},
         {PW_KEY_LINK_INPUT_PORT, portInIdStr.c_str()},
-
     };
     const auto props = SPA_DICT_INIT_ARRAY(props_items);
 
@@ -235,7 +237,7 @@ bool PipeWire::PipeWireManager::internalConnectPorts(const PortId portOutId, con
     if (!linkProxy) {
         return false;
     }
-    pw_core_sync(core,PW_ID_CORE,0);
+    pw_core_sync(core,PW_ID_CORE, 0);
     return true;
 }
 
@@ -261,9 +263,21 @@ bool PipeWire::PipeWireManager::disconnectPorts(PortId portOutId, PortId portInI
     return retCode == 0;
 }
 
+PipeWire::NodeId PipeWire::PipeWireManager::getParentNodeFromPort(PortId portId) {
+    std::scoped_lock lock(this->mutex);
+    for (const auto& node:nodes) {
+        for (const auto& port:node.ports) {
+            if(portId==port.id) {
+                return node.id;
+            }
+        }
+    }
+    return -1;
+}
+
 bool PipeWire::PipeWireManager::internalDisconnectPorts(PortId portOutId, PortId portInId) {
     auto link = getLinkWithPorts(portOutId, portInId);
-    auto* linkProxy = static_cast<pw_proxy *>(pw_registry_bind(
+    auto *linkProxy = static_cast<pw_proxy *>(pw_registry_bind(
         registry,
         link->id,
         PW_TYPE_INTERFACE_Link,
@@ -279,7 +293,7 @@ bool PipeWire::PipeWireManager::internalDisconnectPorts(PortId portOutId, PortId
 }
 
 void PipeWire::PipeWireManager::pipeWireHasChanged(EntityType type) {
-    if (this->pipewireChangedCallback!=nullptr) {
+    if (this->pipewireChangedCallback != nullptr) {
         this->pipewireChangedCallback(type);
     }
 }
