@@ -79,3 +79,7 @@ QList<QVariant> PipeWireUIModel::getNodes() {
 QList<QVariant> PipeWireUIModel::getLinks() {
     return ConvertToQVariantMap(manager.listLinks());
 }
+
+void PipeWireUIModel::linkPorts(int srcPort, int targetPort) {
+    this->manager.connectPorts(srcPort,targetPort);
+}

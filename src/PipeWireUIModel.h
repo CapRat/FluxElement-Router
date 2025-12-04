@@ -20,6 +20,7 @@ public:
     Q_PROPERTY(QList<QVariant> links READ getLinks NOTIFY linksUpdated)
     QList<QVariant> getNodes();
     QList<QVariant> getLinks();
+    Q_INVOKABLE  void linkPorts(int srcPort, int targetPort);
 signals:
     void nodesUpdated();
     void linksUpdated();
