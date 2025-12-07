@@ -26,7 +26,7 @@ Page {
             width: parent.width * 0.8
 
             Image {
-                source: "/images/forest.jpg"
+                //source: "/images/forest.jpg"
                 fillMode: Image.PreserveAspectFit
                 anchors.horizontalCenter: parent.horizontalCenter
             }

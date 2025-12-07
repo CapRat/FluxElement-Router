@@ -10,6 +10,8 @@ Page {
     property var saveLocation: new Map()
     property var startDraggingPoint: null
     property var currentDraggingPoint: null
+
+
     id: routingPanel
 
 
@@ -49,15 +51,17 @@ Page {
         linkCanvas.requestPaint()
     }
 
-    function getPortCoordinate(portId) {
+    function getPortCoordinateAndDir(portId) {
         for (var i = 0; i < nodeElementList.length; i++) {
             let nodeElement = nodeElementList[i]
             if (nodeElement) {
-                let point = nodeElement.getPortCoordinate(portId)
-                if (point) {
-                    point.x = nodeElement.x + point.x
-                    point.y = nodeElement.y + point.y
-                    return point;
+                let ret = nodeElement.getPortCoordinateAndDirection(portId)
+
+                if (ret) {
+                    ret.color=nodeElement.mapTypeToColor()
+                    ret.x = nodeElement.x + ret.x
+                    ret.y = nodeElement.y + ret.y
+                    return ret;
                 }
             }
         }
@@ -88,9 +92,13 @@ Page {
         return null
     }
 
+
     PipeWireUIModel {
         id: model
-        onNodesChanged: redrawNodesDynamic()
+        onNodesChanged: {
+            redrawNodesDynamic()
+            redrawLinksDynamic()
+        }
 
         onLinksChanged: redrawLinksDynamic()
     }
@@ -114,48 +122,49 @@ Page {
                 ctx.strokeStyle = "#FF9800"       // Material Accent Farbe
                 ctx.lineWidth = 2
                 ctx.lineCap = "round"
+                function drawBezier2(startX, startY, endX, endY, fromIsOutput, toIsOutput) {
+                    let dx = Math.max(40, Math.abs(endX - startX) * 0.35)
+                    let cp1X
+                    let cp1Y = startY
+                    let cp2X
+                    let cp2Y = endY
+                    // Ausgang je nach Startport
+                    if (fromIsOutput)
+                        cp1X = startX + dx
+                    else
+                        cp1X = startX - dx
+                    // Eingang je nach Zielport
+                    if (toIsOutput)
+                        cp2X = endX + dx
+                    else
+                        cp2X = endX - dx
+                    ctx.beginPath()
+                    ctx.moveTo(startX, startY)
+                    ctx.bezierCurveTo(cp1X, cp1Y, cp2X, cp2Y, endX, endY)
+                    ctx.stroke()
+                }
 
                 for (var i = 0; i < model.links.length; i++) {
                     var l = model.links[i]
-
-                    var CoordInputPort = getPortCoordinate(l.inputPort)
-                    var CoordOutputPort = getPortCoordinate(l.outputPort)
-                    if (CoordInputPort && CoordOutputPort) {
-                        // Absolute Position der Ports
-                        var startX = CoordInputPort.x
-                        var startY = CoordInputPort.y
-                        var endX = CoordOutputPort.x
-                        var endY = CoordOutputPort.y
-                        //  console.log(startX+":"+startY+"----->"+endX+":"+endY)
-
-                        // Material-like curved link (Bezier)
-                        var cp1X = startX - 100
-                        var cp1Y = startY
-                        var cp2X = endX + 100
-                        var cp2Y = endY
-
-                        ctx.beginPath()
-                        ctx.moveTo(startX, startY)
-
-                        ctx.bezierCurveTo(cp1X, cp1Y, cp2X, cp2Y, endX, endY)
-                        ctx.stroke()
+                    var coordInputPort = getPortCoordinateAndDir(l.inputPort)
+                    var coordOutputPort = getPortCoordinateAndDir(l.outputPort)
+                    ctx.strokeStyle =coordInputPort.color
+                    if (coordInputPort && coordOutputPort) {
+                        drawBezier2(coordInputPort.x, coordInputPort.y, coordOutputPort.x, coordOutputPort.y, coordInputPort.direction === "out", coordOutputPort.direction === "out")
                     }
                 }
                 if (routingPanel.startDraggingPoint && routingPanel.currentDraggingPoint) {
-                    var startX = routingPanel.startDraggingPoint.x
-                    var startY = routingPanel.startDraggingPoint.y
-                    var endX = routingPanel.currentDraggingPoint.x
-                    var endY = routingPanel.currentDraggingPoint.y
-                    var cp1X = startX - 100
-                    var cp1Y = startY
-                    var cp2X = endX + 100
-                    var cp2Y = endY
-
-                    ctx.beginPath()
-                    ctx.moveTo(startX, startY)
-                    //ctx.lineTo(endX, endY)
-                    ctx.bezierCurveTo(cp1X, cp1Y, cp2X, cp2Y, endX, endY)
-                    ctx.stroke()
+                    var startCoord = getPortCoordinateAndDir(routingPanel.startDraggingPoint.id)
+                    ctx.strokeStyle =startCoord.color
+                    var targetX= routingPanel.currentDraggingPoint.x
+                    var targetY=routingPanel.currentDraggingPoint.y
+                    var targetPortId = findPortAt(targetX, targetY)
+                    var targetPort = getPortCoordinateAndDir(targetPortId)
+                    if(targetPort){
+                        targetX=targetPort.x
+                        targetY=targetPort.y
+                    }
+                    drawBezier2(startCoord.x, startCoord.y, targetX, targetY, startCoord.direction === "out", routingPanel.currentDraggingPoint.x < startCoord.x)
                 }
             }
         }
@@ -166,14 +175,14 @@ Page {
             id: nodeX
             onStartDragPort: (portId, portPosX, portPosY) => {
                 scrollPanel.interactive = false
+
                 var mapped = scrollPanel.mapToItem(scrollPanel.contentItem, portPosX, portPosY)
-                routingPanel.startDraggingPoint = {x: mapped.x, y: mapped.y}
-                console.log("Start Dragging" + portId)
+                routingPanel.startDraggingPoint = {x: mapped.x, y: mapped.y, id: portId}
                 redrawLinksDynamic()
             }
             onDraggingPort: (portId, portPosX, portPosY) => {
                 var mapped = scrollPanel.mapToItem(scrollPanel.contentItem, portPosX, portPosY)
-                routingPanel.currentDraggingPoint = {x: mapped.x, y: mapped.y}
+                routingPanel.currentDraggingPoint = {x: mapped.x, y: mapped.y, id: findPortAt(mapped.x, mapped.y)}
                 if (routingPanel.startDraggingPoint != null)
                     redrawLinksDynamic()
             }
@@ -182,16 +191,140 @@ Page {
                 routingPanel.startDraggingPoint = null
                 routingPanel.currentDraggingPoint = null
                 var mapped = scrollPanel.mapToItem(scrollPanel.contentItem, portPosX, portPosY)
-                var targetPortId = findPortAt(mapped.x,mapped.y)
-                if (targetPortId){
-                    model.linkPorts(portId,targetPortId)
+                var targetPortId = findPortAt(mapped.x, mapped.y)
+                if (targetPortId) {
+                    model.linkPorts(portId, targetPortId)
                 }
                 redrawLinksDynamic()
             }
             onDraggingNode: redrawLinksDynamic()
         }
     }
+    function autoLayoutNodes() {
+        console.log("AUTO LAYOUT START")
 
+        if (nodeElementList.length === 0)
+            return
+
+        //
+        // 1) Graph analysieren (Incoming/Outgoing)
+        //
+        let incoming = new Map()
+        let outgoing = new Map()
+
+        for (let n of nodeElementList) {
+            incoming.set(n.node.id, new Set())
+            outgoing.set(n.node.id, new Set())
+        }
+
+        for (let link of model.links) {
+            let outNode = null
+            let inNode = null
+
+            for (let n of nodeElementList) {
+                if (n.portElementList.some(p => p.port.id === link.outputPort))
+                    outNode = n.node.id
+                if (n.portElementList.some(p => p.port.id === link.inputPort))
+                    inNode = n.node.id
+            }
+            if (outNode && inNode) {
+                outgoing.get(outNode).add(inNode)
+                incoming.get(inNode).add(outNode)
+            }
+        }
+
+        //
+        // 2) Node-Level bestimmen (graph layering)
+        //
+        let level = new Map()
+        let queue = []
+
+        // Startnodes zuerst (keine incoming edges)
+        for (let [id, inc] of incoming.entries()) {
+            if (inc.size === 0) {
+                level.set(id, 0)
+                queue.push(id)
+            }
+        }
+
+        // BFS layering
+        while (queue.length > 0) {
+            let id = queue.shift()
+            let lvl = level.get(id)
+            for (let child of outgoing.get(id)) {
+                if (!level.has(child)) {
+                    level.set(child, lvl + 1)
+                    queue.push(child)
+                }
+            }
+        }
+
+        // Unverbundene Nodes → Level 0
+        for (let n of nodeElementList)
+            if (!level.has(n.node.id))
+                level.set(n.node.id, 0)
+
+        //
+        // 3) Nodes pro Level sammeln
+        //
+        let levelMap = new Map()
+        for (let [id, lvl] of level.entries()) {
+            if (!levelMap.has(lvl)) levelMap.set(lvl, [])
+            levelMap.get(lvl).push(id)
+        }
+
+        function byId(id) {
+            return nodeElementList.find(n => n.node.id === id)
+        }
+
+        //
+        // 4) Platzieren — unendlich Platz erlaubt
+        //    → kein Überlappen, egal wie groß
+        //
+        let columnSpacing = 300    // viel Platz horizontal
+        let rowSpacing = 40        // vertikal
+        let startX = 40
+        let startY = 40
+
+        for (let [lvl, ids] of levelMap.entries()) {
+
+            let x = startX + lvl * columnSpacing
+
+            // deterministisch sortieren:
+            ids.sort()  // Alphabetisch oder nach ID
+
+            // wir wissen: wir dürfen beliebig weit runter gehen
+            let currentY = startY
+
+            for (let id of ids) {
+                let n = byId(id)
+
+                // garantiere, dass es nicht überlappt
+                n.x = x
+                n.y = currentY
+
+                // nächster Node in dieser Spalte kommt einfach weiter unten
+                currentY += n.height + rowSpacing
+            }
+        }
+
+        // Canvas updaten
+        redrawLinksDynamic()
+        console.log("AUTO LAYOUT DONE")
+    }
+
+
+
+    Timer {
+        interval: 500     // 1 second
+        repeat: false
+        running: true      // starts automatically
+
+        onTriggered: {
+            autoLayoutNodes()
+
+        }
+    }
 
     Component.onCompleted: {
         redrawNodesDynamic()

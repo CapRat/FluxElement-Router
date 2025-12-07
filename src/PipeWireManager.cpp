@@ -31,8 +31,8 @@ PipeWire::PipeWireManager::PipeWireManager(const PipeWireChangedCallbackType &pi
         throw std::runtime_error("Failed to get PipeWire registry");
 
     registryEvents = {
-        PW_VERSION_REGISTRY_EVENTS,
-        [](void *data,
+        .version=PW_VERSION_REGISTRY_EVENTS,
+        .global=[](void *data,
            const uint32_t id,
            uint32_t permissions,
            const char *type,
@@ -41,13 +41,30 @@ PipeWire::PipeWireManager::PipeWireManager(const PipeWireChangedCallbackType &pi
             auto *self = static_cast<PipeWireManager *>(data);
             self->pipewireEntityAdded(id, std::string(type), props);
         },
-        [](void *data, uint32_t id) {
+        .global_remove=[](void *data, uint32_t id) {
             auto *self = static_cast<PipeWireManager *>(data);
             self->pipewireEntityRemoved(id);
         }
 
     };
+   /* core_events = {
+        .version=PW_VERSION_CORE_EVENTS,
+        .done = [](void *data, uint32_t id, int seq) {
+            if (id == PW_ID_CORE && seq == seq_init) {
 
+            }
+        },
+        .info =nullptr,
+        .ping = nullptr,
+        .error = nullptr,
+        .remove_id = nullptr,
+        .bound_id = nullptr,
+        .add_mem =nullptr ,
+        .remove_mem = nullptr,
+        .bound_props = nullptr,
+    };
+    spa_hook core_listener{};
+    pw_core_add_listener(core, &core_listener , &core_events, nullptr);*/
 
     pw_registry_add_listener(
         registry,

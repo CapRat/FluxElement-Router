@@ -81,5 +81,8 @@ QList<QVariant> PipeWireUIModel::getLinks() {
 }
 
 void PipeWireUIModel::linkPorts(int srcPort, int targetPort) {
-    this->manager.connectPorts(srcPort,targetPort);
+    this->manager.connectPorts(srcPort, targetPort);
+}
+
+void PipeWireUIModel::unlinkPorts(int srcPort, int targetPort) {
 }

@@ -21,6 +21,7 @@ public:
     QList<QVariant> getNodes();
     QList<QVariant> getLinks();
     Q_INVOKABLE  void linkPorts(int srcPort, int targetPort);
+    Q_INVOKABLE  void unlinkPorts(int srcPort, int targetPort);
 signals:
     void nodesUpdated();
     void linksUpdated();

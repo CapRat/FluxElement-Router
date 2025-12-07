@@ -11,9 +11,7 @@ Item {
     property int initialportYDistance: 25 // how large is the initial distance to the first port
     property int portXDistance: 5 // offset how far the ports are inside the node
     property var portElementList:[]
-    property color midiPortColor;
-    property color audioPortColor;
-    property color videoPortColor;
+    property color elementColor: Material.accent
 
     function getMaxLengthPorts() {
         var inCounter = 0
@@ -29,19 +27,32 @@ Item {
         }
         return Math.max(inCounter, outCounter)
     }
-
-    function getPortCoordinate(portId){
+    function mapTypeToColor(){
+        if( node.mediaClass.includes("Audio")){
+            return Qt.rgba(0.600, 0.220, 0.165, 1)
+        }
+        if(node.mediaClass.includes("Midi")){
+            return Qt.rgba(0.188, 0.557, 1.000, 1)
+        }
+        if(node.mediaClass.includes("Video")){
+            return Qt.rgba(1.000, 0.561, 0.188, 1)
+        }
+        return null
+    }
+    function getPortCoordinateAndDirection(portId){
         for(var i =0; i< portElementList.length;i++){
             let pElement=portElementList[i]
             if(pElement && pElement.port.id===portId)
             {
+                let pointAndDirection={x:0,y:pElement.y+pElement.height/2, direction: pElement.port.direction}
                 //return pElement.mapToItem(null,pElement.x-(pElement.width/2), pElement.y-50)
                 if(pElement.port.direction==="in") {
-                    return {x: pElement.x, y: pElement.y+pElement.height/2}
+                    pointAndDirection.x= pElement.x
                 }
                 else{
-                    return {x: pElement.x+pElement.width, y: pElement.y+pElement.height/2}
+                    pointAndDirection.x= pElement.x+pElement.width
                 }
+                return pointAndDirection
             }
         }
         return null
@@ -53,17 +64,18 @@ Item {
 
         Item {
             property var port;
-            property var self;
             width:port1.width
             height:port1.height
+            x: pipeWireNode.x + (port.direction === "in" ? -portXDistance : pipeWireNode.width - port1.width + portXDistance)
+
             Rectangle {
                 id: port1
                 width: portText.width
                 height: portHeight
                 radius: 2
-                color: Material.accent
-                x: pipeWireNode.x + (port.direction === "in" ? -portXDistance : pipeWireNode.width - port1.width + portXDistance)
-                y: pipeWireNode.y + portYDistance
+                color: elementColor
+
+               // y: pipeWireNode.y + portYDistance
                 Text {
                     id: portText
                     font.pixelSize: 12
@@ -111,7 +123,7 @@ Item {
         height: getMaxLengthPorts() * (portHeight + portYDistance) + initialportYDistance + portYDistance
         color: Material.primary
         radius: 5
-        border.color: Material.accent
+        border.color: elementColor
         Text {
             id: nodeName
             elide: Text.ElideRight
@@ -136,6 +148,7 @@ Item {
 
     }
     Component.onCompleted: {
+        elementColor=mapTypeToColor()
         let inCounter = 0;
         let outCounter = 0
         for (let i = 0; i < node.ports.length; i++) {
@@ -155,7 +168,6 @@ Item {
                 })
                 outCounter++
             }
-            inst.self=inst
             if(inst){
                 portElementList.push(inst)
             }

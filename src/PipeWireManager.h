@@ -86,5 +86,7 @@ namespace PipeWire {
 
         PipeWireChangedCallbackType pipewireChangedCallback;
         pw_registry_events registryEvents{};
+        pw_core_events core_events{};
+        int seq_init = -1;
     };
 }
