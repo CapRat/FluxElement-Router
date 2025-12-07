@@ -6,7 +6,7 @@ Ein Werkzeug, das die Kraft von Feuer, Wald und Wasser in deinen Workflow bringt
 
 > [!CAUTION]
 > The Software is absolutly not use ready. Its under heavy development and its only Feature which is implemented, is kind a the routing tools. 
-> This may stay this way in the Future but maybe i continue to develop it.
+> This may stay this way in the Future but maybe i continue to develop it. This should be only used, if it exceeds the 0.X.X Version numbers.
 
 ---
 
