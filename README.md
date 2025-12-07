@@ -4,6 +4,10 @@
 FluxElement Router ist ein hybrides Routing-Device, das Audio- und MIDI-Signale durch eine flexible, element-inspirierte Matrix führt.  
 Ein Werkzeug, das die Kraft von Feuer, Wald und Wasser in deinen Workflow bringt – organisch, dynamisch und präzise.
 
+> [!CAUTION]
+> The Software is absolutly not use ready. Its under heavy development and its only Feature which is implemented, is kind a the routing tools. 
+> This may stay this way in the Future but maybe i continue to develop it.
+
 ---
 
 ## 🔥🌲🌊 Features
