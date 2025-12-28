@@ -60,6 +60,9 @@ QList<QVariant> ConvertToQVariantMap(const std::vector<PipeWire::Link> &p) {
 }
 
 PipeWireUIModel::PipeWireUIModel(QObject *parent) : QObject(parent), manager(
+                                                        [this]() {
+                                                            emit this->initialsed();
+                                                        },
                                                         [this](PipeWire::PipeWireManager::EntityType t) {
                                                             if (t == PipeWire::PipeWireManager::EntityType::Node || t ==
                                                                 PipeWire::PipeWireManager::EntityType::Port) {
@@ -85,4 +88,15 @@ void PipeWireUIModel::linkPorts(int srcPort, int targetPort) {
 }
 
 void PipeWireUIModel::unlinkPorts(int srcPort, int targetPort) {
+    this->manager.disconnectPorts(srcPort, targetPort);
+}
+
+void PipeWireUIModel::unlinkAllPorts() {
+    auto links = this->manager.listLinks();
+    for (const auto &link: links) {
+       // if (!this->manager.disconnectPorts(link.inputPort, link.outputPort)) {
+        this->manager.disconnectPorts(link.inputPort, link.outputPort);
+            this->manager.disconnectPorts(link.outputPort, link.inputPort);
+        //}
+    }
 }

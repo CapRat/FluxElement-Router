@@ -1,3 +1,4 @@
+#include <iostream>
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
 #include <pipewire/pipewire.h>
@@ -8,10 +9,16 @@
 int main(int argc, char *argv[])
 {
 
-    /*PipeWire::PipeWireManager x{};
-    std::this_thread::sleep_for(std::chrono::milliseconds(900));
-    x.connectPorts(72 , 67);
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+   /* bool start=false;
+    PipeWire::PipeWireManager x{[&start]() {
+        start=true;
+        std::cout<<"PipeWireManager initialized"<<std::endl;
+    }};
+    while(!start) {
+        using namespace std::chrono_literals;
+        std::this_thread::sleep_for(50ms);
+    }
+    x.connectPorts(66 , 62);
     for (auto n : x.listNodes()) {
         std::cout <<std::to_string(n.id) << ": " << n.name  << "(" <<n.nickname <<") " <<n.mediaClass <<" "<< n.description << std::endl;
         for (auto p : n.ports) {
@@ -22,7 +29,9 @@ int main(int argc, char *argv[])
         std::cout << link.id << ": " << link.outputPort << " ---> " << link.inputPort << std::endl;
     }
     std::this_thread::sleep_for(std::chrono::milliseconds(2000));
-    x.disconnectPorts(72 , 67);*/
+    x.disconnectPorts(66 , 62);*/
+
+
     qputenv("QT_IM_MODULE", QByteArray("qtvirtualkeyboard"));
 
     QGuiApplication app(argc, argv);
@@ -36,5 +45,5 @@ int main(int argc, char *argv[])
         Qt::QueuedConnection);
     engine.loadFromModule("RaspiHost", "Main");
 
-    return app.exec();
+   return app.exec();
 }

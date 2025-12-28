@@ -58,7 +58,7 @@ Page {
                 let ret = nodeElement.getPortCoordinateAndDirection(portId)
 
                 if (ret) {
-                    ret.color=nodeElement.mapTypeToColor()
+                    ret.color = nodeElement.mapTypeToColor()
                     ret.x = nodeElement.x + ret.x
                     ret.y = nodeElement.y + ret.y
                     return ret;
@@ -92,114 +92,6 @@ Page {
         return null
     }
 
-
-    PipeWireUIModel {
-        id: model
-        onNodesChanged: {
-            redrawNodesDynamic()
-            redrawLinksDynamic()
-        }
-
-        onLinksChanged: redrawLinksDynamic()
-    }
-    Flickable {
-        id: scrollPanel
-        anchors.fill: parent
-        contentWidth: parent.width * 2
-        contentHeight: parent.height * 2
-        // Canvas für Links
-        Canvas {
-            id: linkCanvas
-            anchors.fill: parent
-
-            onWidthChanged: redrawLinksDynamic()
-            onHeightChanged: redrawLinksDynamic()
-
-            onPaint: {
-                var ctx = getContext("2d")
-                ctx.clearRect(0, 0, width, height)
-
-                ctx.strokeStyle = "#FF9800"       // Material Accent Farbe
-                ctx.lineWidth = 2
-                ctx.lineCap = "round"
-                function drawBezier2(startX, startY, endX, endY, fromIsOutput, toIsOutput) {
-                    let dx = Math.max(40, Math.abs(endX - startX) * 0.35)
-                    let cp1X
-                    let cp1Y = startY
-                    let cp2X
-                    let cp2Y = endY
-                    // Ausgang je nach Startport
-                    if (fromIsOutput)
-                        cp1X = startX + dx
-                    else
-                        cp1X = startX - dx
-                    // Eingang je nach Zielport
-                    if (toIsOutput)
-                        cp2X = endX + dx
-                    else
-                        cp2X = endX - dx
-                    ctx.beginPath()
-                    ctx.moveTo(startX, startY)
-                    ctx.bezierCurveTo(cp1X, cp1Y, cp2X, cp2Y, endX, endY)
-                    ctx.stroke()
-                }
-
-                for (var i = 0; i < model.links.length; i++) {
-                    var l = model.links[i]
-                    var coordInputPort = getPortCoordinateAndDir(l.inputPort)
-                    var coordOutputPort = getPortCoordinateAndDir(l.outputPort)
-                    ctx.strokeStyle =coordInputPort.color
-                    if (coordInputPort && coordOutputPort) {
-                        drawBezier2(coordInputPort.x, coordInputPort.y, coordOutputPort.x, coordOutputPort.y, coordInputPort.direction === "out", coordOutputPort.direction === "out")
-                    }
-                }
-                if (routingPanel.startDraggingPoint && routingPanel.currentDraggingPoint) {
-                    var startCoord = getPortCoordinateAndDir(routingPanel.startDraggingPoint.id)
-                    ctx.strokeStyle =startCoord.color
-                    var targetX= routingPanel.currentDraggingPoint.x
-                    var targetY=routingPanel.currentDraggingPoint.y
-                    var targetPortId = findPortAt(targetX, targetY)
-                    var targetPort = getPortCoordinateAndDir(targetPortId)
-                    if(targetPort){
-                        targetX=targetPort.x
-                        targetY=targetPort.y
-                    }
-                    drawBezier2(startCoord.x, startCoord.y, targetX, targetY, startCoord.direction === "out", routingPanel.currentDraggingPoint.x < startCoord.x)
-                }
-            }
-        }
-    }
-    Component {
-        id: nodeTempalte
-        PipeWireNode {
-            id: nodeX
-            onStartDragPort: (portId, portPosX, portPosY) => {
-                scrollPanel.interactive = false
-
-                var mapped = scrollPanel.mapToItem(scrollPanel.contentItem, portPosX, portPosY)
-                routingPanel.startDraggingPoint = {x: mapped.x, y: mapped.y, id: portId}
-                redrawLinksDynamic()
-            }
-            onDraggingPort: (portId, portPosX, portPosY) => {
-                var mapped = scrollPanel.mapToItem(scrollPanel.contentItem, portPosX, portPosY)
-                routingPanel.currentDraggingPoint = {x: mapped.x, y: mapped.y, id: findPortAt(mapped.x, mapped.y)}
-                if (routingPanel.startDraggingPoint != null)
-                    redrawLinksDynamic()
-            }
-            onDragStopPort: (portId, portPosX, portPosY) => {
-                scrollPanel.interactive = true
-                routingPanel.startDraggingPoint = null
-                routingPanel.currentDraggingPoint = null
-                var mapped = scrollPanel.mapToItem(scrollPanel.contentItem, portPosX, portPosY)
-                var targetPortId = findPortAt(mapped.x, mapped.y)
-                if (targetPortId) {
-                    model.linkPorts(portId, targetPortId)
-                }
-                redrawLinksDynamic()
-            }
-            onDraggingNode: redrawLinksDynamic()
-        }
-    }
     function autoLayoutNodes() {
         console.log("AUTO LAYOUT START")
 
@@ -313,18 +205,129 @@ Page {
         console.log("AUTO LAYOUT DONE")
     }
 
+    PipeWireUIModel {
+        id: model
+        onNodesChanged: {
+            redrawNodesDynamic()
+            redrawLinksDynamic()
+        }
 
-
-    Timer {
-        interval: 500     // 1 second
-        repeat: false
-        running: true      // starts automatically
-
-        onTriggered: {
+        onLinksChanged: redrawLinksDynamic()
+        onInitialsed: autoLayoutNodes()
+    }
+    Button {
+        id: resetAllLinks
+        text: "Reset"
+        y: 15
+        x: parent.x + parent.width - 15 - width
+        z: 9999
+        onClicked: {
+            console.log("reset")
+            model.unlinkAllPorts()
             autoLayoutNodes()
+        }
 
+
+    }
+    Flickable {
+        id: scrollPanel
+        anchors.fill: parent
+        contentWidth: parent.width * 2
+        contentHeight: parent.height * 2
+        // Canvas für Links
+        Canvas {
+            id: linkCanvas
+            anchors.fill: parent
+
+            onWidthChanged: redrawLinksDynamic()
+            onHeightChanged: redrawLinksDynamic()
+
+            onPaint: {
+                var ctx = getContext("2d")
+                ctx.clearRect(0, 0, width, height)
+
+                ctx.strokeStyle = "#FF9800"       // Material Accent Farbe
+                ctx.lineWidth = 2
+                ctx.lineCap = "round"
+                function drawBezier2(startX, startY, endX, endY, fromIsOutput, toIsOutput) {
+                    let dx = Math.max(40, Math.abs(endX - startX) * 0.35)
+                    let cp1X
+                    let cp1Y = startY
+                    let cp2X
+                    let cp2Y = endY
+                    // Ausgang je nach Startport
+                    if (fromIsOutput)
+                        cp1X = startX + dx
+                    else
+                        cp1X = startX - dx
+                    // Eingang je nach Zielport
+                    if (toIsOutput)
+                        cp2X = endX + dx
+                    else
+                        cp2X = endX - dx
+                    ctx.beginPath()
+                    ctx.moveTo(startX, startY)
+                    ctx.bezierCurveTo(cp1X, cp1Y, cp2X, cp2Y, endX, endY)
+                    ctx.stroke()
+                }
+
+                for (var i = 0; i < model.links.length; i++) {
+                    var l = model.links[i]
+                    var coordInputPort = getPortCoordinateAndDir(l.inputPort)
+                    var coordOutputPort = getPortCoordinateAndDir(l.outputPort)
+                    ctx.strokeStyle = coordInputPort.color
+                    if (coordInputPort && coordOutputPort) {
+                        drawBezier2(coordInputPort.x, coordInputPort.y, coordOutputPort.x, coordOutputPort.y, coordInputPort.direction === "out", coordOutputPort.direction === "out")
+                    }
+                }
+                if (routingPanel.startDraggingPoint && routingPanel.currentDraggingPoint) {
+                    var startCoord = getPortCoordinateAndDir(routingPanel.startDraggingPoint.id)
+                    ctx.strokeStyle = startCoord.color
+                    var targetX = routingPanel.currentDraggingPoint.x
+                    var targetY = routingPanel.currentDraggingPoint.y
+                    var targetPortId = findPortAt(targetX, targetY)
+                    var targetPort = getPortCoordinateAndDir(targetPortId)
+                    if (targetPort) {
+                        targetX = targetPort.x
+                        targetY = targetPort.y
+                    }
+                    drawBezier2(startCoord.x, startCoord.y, targetX, targetY, startCoord.direction === "out", routingPanel.currentDraggingPoint.x < startCoord.x)
+                }
+            }
         }
     }
+    Component {
+        id: nodeTempalte
+        PipeWireNode {
+            id: nodeX
+            onStartDragPort: (portId, portPosX, portPosY) => {
+                scrollPanel.interactive = false
+
+                var mapped = scrollPanel.mapToItem(scrollPanel.contentItem, portPosX, portPosY)
+                routingPanel.startDraggingPoint = {x: mapped.x, y: mapped.y, id: portId}
+                redrawLinksDynamic()
+            }
+            onDraggingPort: (portId, portPosX, portPosY) => {
+                var mapped = scrollPanel.mapToItem(scrollPanel.contentItem, portPosX, portPosY)
+                routingPanel.currentDraggingPoint = {x: mapped.x, y: mapped.y, id: findPortAt(mapped.x, mapped.y)}
+                if (routingPanel.startDraggingPoint != null)
+                    redrawLinksDynamic()
+            }
+            onDragStopPort: (portId, portPosX, portPosY) => {
+                scrollPanel.interactive = true
+                routingPanel.startDraggingPoint = null
+                routingPanel.currentDraggingPoint = null
+                var mapped = scrollPanel.mapToItem(scrollPanel.contentItem, portPosX, portPosY)
+                var targetPortId = findPortAt(mapped.x, mapped.y)
+                if (targetPortId) {
+                    model.linkPorts(portId, targetPortId)
+                }
+                redrawLinksDynamic()
+            }
+            onDraggingNode: redrawLinksDynamic()
+        }
+    }
+
 
     Component.onCompleted: {
         redrawNodesDynamic()

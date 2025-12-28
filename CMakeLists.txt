@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
 
-project(RaspiHost VERSION 0.1 LANGUAGES CXX)
+project(RaspiHost VERSION 0.1 )
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -23,6 +23,21 @@ qt_add_executable(appRaspiHost
         src/PipeWireManager.h
         src/PipeWireUIModel.cpp
         src/PipeWireUIModel.h
+        src/PipeWire/Registry.cpp
+        src/PipeWire/Registry.h
+        src/Utils/Event.h
+        src/PipeWire/Loop.cpp
+        src/PipeWire/Loop.h
+        src/PipeWire/Context.cpp
+        src/PipeWire/Context.h
+        src/PipeWire/Core.cpp
+        src/PipeWire/Core.h
+        src/PipeWire/Utils.h
+
+)
+add_executable(test src/clientMain.c)
+target_link_libraries(test
+        PUBLIC PipeWire::PipeWire
 )
 
 qt_add_qml_module(appRaspiHost

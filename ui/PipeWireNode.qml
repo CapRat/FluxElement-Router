@@ -11,8 +11,9 @@ Item {
     property int initialportYDistance: 25 // how large is the initial distance to the first port
     property int portXDistance: 5 // offset how far the ports are inside the node
     property var portElementList:[]
+    width:pipeWireNode.width
+    height:pipeWireNode.height
     property color elementColor: Material.accent
-
     function getMaxLengthPorts() {
         var inCounter = 0
         var outCounter = 0
@@ -67,6 +68,7 @@ Item {
             width:port1.width
             height:port1.height
             x: pipeWireNode.x + (port.direction === "in" ? -portXDistance : pipeWireNode.width - port1.width + portXDistance)
+
 
             Rectangle {
                 id: port1

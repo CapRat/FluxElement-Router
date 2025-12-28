@@ -3,108 +3,56 @@
 //
 
 #include "PipeWireManager.h"
-
+#include <pipewire/extensions/security-context.h>
+#include <pipewire/extensions/metadata.h>
 #include <iostream>
+#include <chrono>
+#include "PipeWire/Loop.h"
 
-struct TransportManPortPort {
-    PipeWire::PipeWireManager *manager;
-    PipeWire::PortId portOut;
-    PipeWire::PortId portIn;
+struct ProxySupportStruct {
+    pw_proxy *linkProxy = nullptr;
+    spa_hook hook{};
+
+    ~ProxySupportStruct() = default;
 };
 
-PipeWire::PipeWireManager::PipeWireManager(const PipeWireChangedCallbackType &pipewireChangedCallback) : loop(nullptr),
-    context(nullptr), core(nullptr), registry(nullptr),
-    running(true) {
+struct PipeWire::PipeWireManager::PipeWireData {
+    std::unique_ptr<Loop> mainLoop = nullptr;
+    std::mutex mutex;
+};
+
+PipeWire::PipeWireManager::PipeWireManager(
+    const PipeWireInitialised &pipewireInitialized,
+    const PipeWireChangedCallbackType &pipewireChangedCallback) {
+    // Initialise Internal DataStructure
+    this->setPipewireInitialisedCallback(pipewireInitialized);
     this->setPipewireHasChangedCallback(pipewireChangedCallback);
+
+    pipeWireData = std::make_unique<PipeWireData>();
     pw_init(nullptr, nullptr);
-
-    loop = pw_main_loop_new(nullptr);
-    context = pw_context_new(pw_main_loop_get_loop(loop), nullptr, 0);
-    //pw_context_load_module(context, "libpipewire-module-link-factory", NULL, NULL);
-    core = pw_context_connect(context, nullptr, 0);
-
-    if (!core)
-        throw std::runtime_error("Failed to connect to PipeWire core");
-
-    registry = pw_core_get_registry(core, PW_VERSION_REGISTRY, 0);
-    if (!registry)
-        throw std::runtime_error("Failed to get PipeWire registry");
-
-    registryEvents = {
-        .version=PW_VERSION_REGISTRY_EVENTS,
-        .global=[](void *data,
-           const uint32_t id,
-           uint32_t permissions,
-           const char *type,
-           uint32_t version,
-           const spa_dict *props) {
-            auto *self = static_cast<PipeWireManager *>(data);
-            self->pipewireEntityAdded(id, std::string(type), props);
-        },
-        .global_remove=[](void *data, uint32_t id) {
-            auto *self = static_cast<PipeWireManager *>(data);
-            self->pipewireEntityRemoved(id);
-        }
-
+    pipeWireData->mainLoop = std::make_unique<Loop>();
+    pipeWireData->mainLoop->getContext()->getCore()->getRegistry()->global += [this
+            ](ID id, Permission permiossions, EventType type, Version version, Props props) {
+                this->pipewireEntityAdded(id, permiossions, type, props);
+            };
+    pipeWireData->mainLoop->getContext()->getCore()->getRegistry()->initialized += [this]() {
+        this->pipewireInitialized();
     };
-   /* core_events = {
-        .version=PW_VERSION_CORE_EVENTS,
-        .done = [](void *data, uint32_t id, int seq) {
-            if (id == PW_ID_CORE && seq == seq_init) {
-
-            }
-        },
-        .info =nullptr,
-        .ping = nullptr,
-        .error = nullptr,
-        .remove_id = nullptr,
-        .bound_id = nullptr,
-        .add_mem =nullptr ,
-        .remove_mem = nullptr,
-        .bound_props = nullptr,
-    };
-    spa_hook core_listener{};
-    pw_core_add_listener(core, &core_listener , &core_events, nullptr);*/
-
-    pw_registry_add_listener(
-        registry,
-        &registryListener,
-        &registryEvents,
-        this
-    );
-
-    // Start background event loop thread
-    loopThread = std::thread([this]() {
-        pw_main_loop_run(loop);
-    });
+    pipeWireData->mainLoop->start();
 }
 
 
 PipeWire::PipeWireManager::~PipeWireManager() {
-    running = false;
-
-    if (loop)
-        pw_main_loop_quit(loop);
-
-    if (loopThread.joinable())
-        loopThread.join();
-
-
-    if (registry) pw_proxy_destroy((pw_proxy *) registry);
-    if (core) pw_core_disconnect(core);
-    if (context) pw_context_destroy(context);
-    if (loop) pw_main_loop_destroy(loop);
-
     pw_deinit();
 }
 
 std::vector<PipeWire::Node> PipeWire::PipeWireManager::listNodes() {
-    std::scoped_lock lock(mutex);
+    std::scoped_lock lock(pipeWireData->mutex);
     return nodes;
 }
 
 std::vector<PipeWire::Link> PipeWire::PipeWireManager::listLinks() {
-    std::scoped_lock lock(mutex);
+    std::scoped_lock lock(pipeWireData->mutex);
     return links;
 }
 
@@ -113,8 +61,12 @@ void PipeWire::PipeWireManager::setPipewireHasChangedCallback(
     this->pipewireChangedCallback = pipewireHasChangedCallback;
 }
 
+void PipeWire::PipeWireManager::setPipewireInitialisedCallback(const PipeWireInitialised &pipeWireInitialised) {
+    this->pipewireInitialized = pipeWireInitialised;
+}
+
 PipeWire::Node *PipeWire::PipeWireManager::getNodeWithId(NodeId entityId) {
-    std::scoped_lock lock(this->mutex);
+    std::scoped_lock lock(this->pipeWireData->mutex);
     auto foundNode = std::ranges::find_if(nodes, [entityId](const Node &node) {
         return node.id == entityId;
     });
@@ -125,7 +77,7 @@ PipeWire::Node *PipeWire::PipeWireManager::getNodeWithId(NodeId entityId) {
 }
 
 PipeWire::Link *PipeWire::PipeWireManager::getLinkWithPorts(PortId output, PortId input) {
-    std::scoped_lock lock(this->mutex);
+    std::scoped_lock lock(this->pipeWireData->mutex);
     auto foundLink = std::ranges::find_if(links, [input,output](const Link &l) {
         return l.inputPort == input && l.outputPort == output;
     });
@@ -135,50 +87,80 @@ PipeWire::Link *PipeWire::PipeWireManager::getLinkWithPorts(PortId output, PortI
     return nullptr;
 }
 
-void PipeWire::PipeWireManager::pipewireEntityAdded(uint32_t entityId, const std::string &type, const spa_dict *props) {
-    auto getFromSpaDict = [&](const char *k) {
-        const char *v = spa_dict_lookup(props, k);
-        return v ? std::string(v) : "";
-    };
+void PipeWire::PipeWireManager::pipewireEntityAdded(ID entityId, Permission permissions, const EventType &type,
+                                                    Props props) {
     if (type == PW_TYPE_INTERFACE_Node) {
         Node node;
         node.id = entityId;
-        node.name = getFromSpaDict(PW_KEY_NODE_NAME);
-        node.mediaClass = getFromSpaDict(PW_KEY_MEDIA_CLASS);
-        node.description = getFromSpaDict(PW_KEY_NODE_DESCRIPTION);
-        node.nickname = getFromSpaDict(PW_KEY_NODE_NICK);
+        node.name = props[PW_KEY_NODE_NAME];
+        node.mediaClass = props[PW_KEY_MEDIA_CLASS];
+        node.description = props[PW_KEY_NODE_DESCRIPTION];
+        node.nickname = props[PW_KEY_NODE_NICK];
         node.ports = {};
-
-        std::scoped_lock lock(this->mutex);
-
+        std::scoped_lock lock(this->pipeWireData->mutex);
         this->nodes.push_back(node);
         pipeWireHasChanged(EntityType::Node);
     } else if (type == PW_TYPE_INTERFACE_Port) {
         Port port;
         port.id = entityId;
-        const auto node = getNodeWithId(std::stoi(getFromSpaDict(PW_KEY_NODE_ID)));
-        port.name = getFromSpaDict(PW_KEY_PORT_NAME);
-        port.alias = getFromSpaDict(PW_KEY_PORT_ALIAS);
-        port.direction = getFromSpaDict(PW_KEY_PORT_DIRECTION);
+        const auto node = getNodeWithId(std::stoi(props[PW_KEY_NODE_ID]));
+        port.name = props[PW_KEY_PORT_NAME];
+        port.alias = props[PW_KEY_PORT_ALIAS];
+        port.direction = props[PW_KEY_PORT_DIRECTION];
         node->ports.push_back(port);
         pipeWireHasChanged(EntityType::Port);
     } else if (type == PW_TYPE_INTERFACE_Link) {
         Link link;
         link.id = entityId;
-        link.inputPort = std::stoi(getFromSpaDict(PW_KEY_LINK_INPUT_PORT));
-        link.outputPort = std::stoi(getFromSpaDict(PW_KEY_LINK_OUTPUT_PORT));
-        link.inputNode= this->getParentNodeFromPort(link.inputPort);
-        link.outputNode= this->getParentNodeFromPort(link.outputPort);
-        auto str=  getFromSpaDict(PW_KEY_NODE_NAME);
-        this->links.push_back(link);
-        pipeWireHasChanged(EntityType::Link);
+        link.inputPort = std::stoi(props[PW_KEY_LINK_INPUT_PORT]);
+        link.outputPort = std::stoi(props[PW_KEY_LINK_OUTPUT_PORT]);
+        link.inputNode = this->getParentNodeFromPort(link.inputPort);
+        link.outputNode = this->getParentNodeFromPort(link.outputPort);
+        link.impl = static_cast<pw_proxy *>(pw_registry_bind(
+            pipeWireData->mainLoop->getContext()->getCore()->getRegistry()->get(),
+            link.id,
+            PW_TYPE_INTERFACE_Link,
+            PW_VERSION_LINK,
+            0
+        ));
+        if (!this->getLinkWithPorts(link.outputPort, link.inputPort)) {
+
+            this->links.push_back(link);
+            pipeWireHasChanged(EntityType::Link);
+        }
+    } else if (type == PW_TYPE_INTERFACE_Client) {
+        auto pidStr = props[PW_KEY_SEC_PID];
+        auto clientName = props[PW_KEY_APP_NAME];
+        if (std::stoi(pidStr) == getpid()) {
+            /*   // Setting permissions on remove pipewire object (doesnt work though)
+               auto *client = static_cast<pw_client *>(pw_registry_bind(
+                   pipeWireData->loop,
+                   entityId,
+                   PW_TYPE_INTERFACE_Client,
+                   PW_VERSION_CLIENT,
+                   0
+               ));
+
+               pipeWireData->clientProxy = client;
+               pw_permission perm = PW_PERMISSION_INIT(PW_ID_ANY, PW_PERM_ALL);
+               //pw_core_sync(pipeWireData->core, PW_ID_CORE, 0);
+               */
+        }
+    }
+    else if (type == PW_TYPE_INTERFACE_SecurityContext) {
+        auto x=5;
+
+    }
+    else if (type == PW_TYPE_INTERFACE_Metadata) {
+
+      auto y =2;
     }
 }
 
 void PipeWire::PipeWireManager::pipewireEntityRemoved(uint32_t entityId) {
     // Do deletion of node here
 
-    std::scoped_lock lock(this->mutex);
+    std::scoped_lock lock(this->pipeWireData->mutex);
     for (auto nIt = nodes.begin(); nIt != nodes.end();) {
         // 1) Remove node if its ID matches
         if (nIt->id == entityId) {
@@ -212,39 +194,24 @@ void PipeWire::PipeWireManager::pipewireEntityRemoved(uint32_t entityId) {
 }
 
 bool PipeWire::PipeWireManager::connectPorts(const PortId portOutId, const PortId portInId) {
-    auto transferObj = new std::tuple{this, portOutId, portInId};
-    auto retCode = pw_loop_invoke(
-        pw_main_loop_get_loop(loop),
-        [](spa_loop *loop, bool async, uint32_t seq, const void *data, size_t size, void *user_data)-> int {
-            //  const auto transferObj=static_cast<const TransportManPortPort*>(user_data);
-            auto transferObj = static_cast<std::tuple<PipeWireManager *, PortId, PortId> *>(user_data);
-            auto self = std::get<0>(*transferObj);
-            auto retVal = self->internalConnectPorts(std::get<1>(*transferObj), std::get<2>(*transferObj));
-            delete transferObj;
-            return retVal;
-        },
-        0,
-        nullptr,
-        0,
-        false,
-        transferObj
-    );
-
-    return retCode == 0;
+    return this->pipeWireData->mainLoop->invokeFunctionInLoop([this, portOutId, portInId]() {
+        return this->internalConnectPorts(portOutId, portInId) == 0;
+    }) == 0;
 }
 
 
-bool PipeWire::PipeWireManager::internalConnectPorts(const PortId portOutId, const PortId portInId) const {
+bool PipeWire::PipeWireManager::internalConnectPorts(const PortId portOutId, const PortId portInId) {
     const auto portInIdStr = std::to_string(portInId);
     const auto portOutIdStr = std::to_string(portOutId);
     const spa_dict_item props_items[] = {
         {PW_KEY_LINK_OUTPUT_PORT, portOutIdStr.c_str()},
         {PW_KEY_LINK_INPUT_PORT, portInIdStr.c_str()},
+        {PW_KEY_ACCESS, "0x1f"} // R W X M D
     };
     const auto props = SPA_DICT_INIT_ARRAY(props_items);
 
     auto *linkProxy = static_cast<pw_proxy *>(pw_core_create_object(
-        core,
+        pipeWireData->mainLoop->getContext()->getCore()->get(),
         "link-factory",
         PW_TYPE_INTERFACE_Link,
         PW_VERSION_LINK,
@@ -254,37 +221,38 @@ bool PipeWire::PipeWireManager::internalConnectPorts(const PortId portOutId, con
     if (!linkProxy) {
         return false;
     }
-    pw_core_sync(core,PW_ID_CORE, 0);
+
+    // pw_proxy_add_listener(linkProxy,&pipeWireData->proxyListener,&pipeWireData->proxy_events, this);
+    pw_core_sync(pipeWireData->mainLoop->getContext()->getCore()->get(),PW_ID_CORE, 0);
+    Link l;
+    l.id = pw_proxy_get_id(linkProxy);
+    l.inputPort = portInId;
+    l.outputPort = portOutId;
+    l.impl = linkProxy;
+    this->links.push_back(l);
+    pipeWireHasChanged(EntityType::Link);
     return true;
 }
 
 bool PipeWire::PipeWireManager::disconnectPorts(PortId portOutId, PortId portInId) {
-    auto transferObj = new std::tuple{this, portOutId, portInId};
-    auto retCode = pw_loop_invoke(
-        pw_main_loop_get_loop(loop),
-        [](struct spa_loop *loop, bool async, uint32_t seq, const void *data, size_t size,
-           void *user_data)-> int {
-            auto transferObj = static_cast<std::tuple<PipeWireManager *, PortId, PortId> *>(user_data);
-            auto self = std::get<0>(*transferObj);
-            auto retVal = self->internalDisconnectPorts(std::get<1>(*transferObj), std::get<2>(*transferObj));
-            delete transferObj;
-            return retVal;
-        },
-        0,
-        nullptr,
-        0,
-        false,
-        transferObj
-    );
+    return this->pipeWireData->mainLoop->invokeFunctionInLoop([this, portOutId, portInId]() {
+        return this->internalDisconnectPorts(portOutId, portInId) == 0;
+    }) == 0;
+}
 
-    return retCode == 0;
+bool PipeWire::PipeWireManager::internalDisconnectPorts(PortId portOutId, PortId portInId) {
+    auto link = getLinkWithPorts(portOutId, portInId);
+    if (link == nullptr)return false;
+
+    pw_proxy_destroy(static_cast<pw_proxy *>(link->impl));
+    return true;
 }
 
 PipeWire::NodeId PipeWire::PipeWireManager::getParentNodeFromPort(PortId portId) {
-    std::scoped_lock lock(this->mutex);
-    for (const auto& node:nodes) {
-        for (const auto& port:node.ports) {
-            if(portId==port.id) {
+    std::scoped_lock lock(this->pipeWireData->mutex);
+    for (const auto &node: nodes) {
+        for (const auto &port: node.ports) {
+            if (portId == port.id) {
                 return node.id;
             }
         }
@@ -292,26 +260,16 @@ PipeWire::NodeId PipeWire::PipeWireManager::getParentNodeFromPort(PortId portId)
     return -1;
 }
 
-bool PipeWire::PipeWireManager::internalDisconnectPorts(PortId portOutId, PortId portInId) {
-    auto link = getLinkWithPorts(portOutId, portInId);
-    auto *linkProxy = static_cast<pw_proxy *>(pw_registry_bind(
-        registry,
-        link->id,
-        PW_TYPE_INTERFACE_Link,
-        PW_VERSION_LINK,
-        0
-    ));
-    if (!linkProxy) {
-        return false;
-    }
-
-    pw_proxy_destroy(linkProxy); // this deletes the link and disconnects ports
-    return true;
-}
 
 void PipeWire::PipeWireManager::pipeWireHasChanged(EntityType type) {
     if (this->pipewireChangedCallback != nullptr) {
         this->pipewireChangedCallback(type);
+    }
+}
+
+void PipeWire::PipeWireManager::pipeWireInitialised() {
+    if (this->pipewireInitialized != nullptr) {
+        this->pipewireInitialized();
     }
 }
 

@@ -22,10 +22,11 @@ public:
     QList<QVariant> getLinks();
     Q_INVOKABLE  void linkPorts(int srcPort, int targetPort);
     Q_INVOKABLE  void unlinkPorts(int srcPort, int targetPort);
+    Q_INVOKABLE  void unlinkAllPorts();
 signals:
+    void initialsed();
     void nodesUpdated();
     void linksUpdated();
-
 private:
 
 
